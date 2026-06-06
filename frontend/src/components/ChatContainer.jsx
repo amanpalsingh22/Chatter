@@ -12,26 +12,32 @@ const ChatContainer = () => {
     messages,
     getMessages,
     isMessagesLoading,
-    selectedUser,
+    isLoadingOlderMessages,
+    loadOlderMessages,
+    messagePagination,
+    selectedChat,
+    shouldScrollToBottom,
     subscribeToMessages,
     unsubscribeFromMessages,
   } = useChatStore();
   const { authUser } = useAuthStore();
   const messageEndRef = useRef(null);
 
+  const getSenderId = (senderId) => (typeof senderId === "object" ? senderId._id : senderId);
+
   useEffect(() => {
-    getMessages(selectedUser._id);
+    getMessages(selectedChat._id);
 
     subscribeToMessages();
 
     return () => unsubscribeFromMessages();
-  }, [selectedUser._id, getMessages, subscribeToMessages, unsubscribeFromMessages]);
+  }, [selectedChat._id, getMessages, subscribeToMessages, unsubscribeFromMessages]);
 
   useEffect(() => {
-    if (messageEndRef.current && messages) {
+    if (shouldScrollToBottom && messageEndRef.current && messages) {
       messageEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, [messages, shouldScrollToBottom]);
 
   if (isMessagesLoading) {
     return (
@@ -48,25 +54,41 @@ const ChatContainer = () => {
       <ChatHeader />
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messagePagination.hasMore && (
+          <div className="flex justify-center">
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={loadOlderMessages}
+              disabled={isLoadingOlderMessages}
+            >
+              {isLoadingOlderMessages ? "Loading..." : "Load earlier messages"}
+            </button>
+          </div>
+        )}
+
         {messages.map((message) => (
           <div
             key={message._id}
-            className={`chat ${message.senderId === authUser._id ? "chat-end" : "chat-start"}`}
+            className={`chat ${getSenderId(message.senderId) === authUser._id ? "chat-end" : "chat-start"}`}
             ref={messageEndRef}
           >
             <div className=" chat-image avatar">
               <div className="size-10 rounded-full border">
                 <img
                   src={
-                    message.senderId === authUser._id
+                    getSenderId(message.senderId) === authUser._id
                       ? authUser.profilePic || "/avatar.png"
-                      : selectedUser.profilePic || "/avatar.png"
+                      : message.senderId?.profilePic || selectedChat.profilePic || "/avatar.png"
                   }
                   alt="profile pic"
                 />
               </div>
             </div>
             <div className="chat-header mb-1">
+              {selectedChat.isGroup && getSenderId(message.senderId) !== authUser._id && (
+                <span className="text-xs font-medium">{message.senderId?.fullName}</span>
+              )}
               <time className="text-xs opacity-50 ml-1">
                 {formatMessageTime(message.createdAt)}
               </time>

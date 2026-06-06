@@ -2,12 +2,18 @@ import { generateToken } from "../lib/utils.js";
 import User from "../models/user.model.js";
 import bcrypt from "bcryptjs";
 import cloudinary from "../lib/cloudinary.js";
+import { isValidEmail, normalizeEmail } from "../lib/validators.js";
 
 export const signup = async (req, res) => {
-  const { fullName, email, password } = req.body;
+  const { fullName, password } = req.body;
+  const email = normalizeEmail(req.body.email);
   try {
-    if (!fullName || !email || !password) {
+    if (!fullName?.trim() || !email || !password) {
       return res.status(400).json({ message: "All fields are required" });
+    }
+
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ message: "Invalid email format" });
     }
 
     if (password.length < 6) {
@@ -22,7 +28,7 @@ export const signup = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const newUser = new User({
-      fullName,
+      fullName: fullName.trim(),
       email,
       password: hashedPassword,
     });
@@ -48,8 +54,13 @@ export const signup = async (req, res) => {
 };
 
 export const login = async (req, res) => {
-  const { email, password } = req.body;
+  const { password } = req.body;
+  const email = normalizeEmail(req.body.email);
   try {
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
+
     const user = await User.findOne({ email });
 
     if (!user) {
