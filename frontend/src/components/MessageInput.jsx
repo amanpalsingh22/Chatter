@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useChatStore } from "../store/useChatStore";
 import { Image, Send, X } from "lucide-react";
 import toast from "react-hot-toast";
@@ -7,7 +7,16 @@ const MessageInput = () => {
   const [text, setText] = useState("");
   const [imagePreview, setImagePreview] = useState(null);
   const fileInputRef = useRef(null);
-  const { isSendingMessage, sendMessage } = useChatStore();
+  const typingTimeoutRef = useRef(null);
+  const { clearReplyTo, isSendingMessage, replyTo, selectedChat, sendMessage, startTyping, stopTyping } =
+    useChatStore();
+
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      stopTyping();
+    };
+  }, [selectedChat?._id, stopTyping]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -28,6 +37,23 @@ const MessageInput = () => {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const handleTextChange = (e) => {
+    const value = e.target.value;
+    setText(value);
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
+    if (!value.trim()) {
+      stopTyping();
+      return;
+    }
+
+    startTyping();
+    typingTimeoutRef.current = setTimeout(() => {
+      stopTyping();
+    }, 1200);
+  };
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (isSendingMessage) return;
@@ -41,6 +67,8 @@ const MessageInput = () => {
     setText("");
     setImagePreview(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    stopTyping();
 
     try {
       await sendMessage(messageData);
@@ -51,8 +79,32 @@ const MessageInput = () => {
     }
   };
 
+  const getReplySenderName = () => {
+    if (!replyTo?.senderId) return "";
+    if (typeof replyTo.senderId === "object") return replyTo.senderId.fullName || "Someone";
+    return "Someone";
+  };
+
+  const getReplySummary = () => {
+    if (!replyTo) return "";
+    if (replyTo.isDeleted) return "Deleted message";
+    return replyTo.text || (replyTo.image ? "Image" : "Message");
+  };
+
   return (
     <div className="p-4 w-full">
+      {replyTo && (
+        <div className="mb-3 flex items-start justify-between gap-3 rounded-lg border border-base-300 bg-base-200 p-3">
+          <div className="min-w-0 border-l-2 border-primary pl-3">
+            <div className="text-xs font-semibold opacity-70">{getReplySenderName()}</div>
+            <div className="text-sm truncate">{getReplySummary()}</div>
+          </div>
+          <button type="button" className="btn btn-ghost btn-xs btn-circle" onClick={clearReplyTo}>
+            <X className="size-3" />
+          </button>
+        </div>
+      )}
+
       {imagePreview && (
         <div className="mb-3 flex items-center gap-2">
           <div className="relative">
@@ -81,7 +133,7 @@ const MessageInput = () => {
             placeholder="Type a message..."
             value={text}
             disabled={isSendingMessage}
-            onChange={(e) => setText(e.target.value)}
+            onChange={handleTextChange}
           />
           <input
             type="file"

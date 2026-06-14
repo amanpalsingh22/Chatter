@@ -1,6 +1,14 @@
 import { THEMES } from "../constants";
 import { useThemeStore } from "../store/useThemeStore";
-import { Send } from "lucide-react";
+import {
+  areNotificationsEnabled,
+  getNotificationPermission,
+  requestNotificationPermission,
+  setNotificationsEnabled as saveNotificationsEnabled,
+} from "../lib/notifications";
+import { Bell, BellOff, Send } from "lucide-react";
+import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 
 const PREVIEW_MESSAGES = [
   { id: 1, content: "Hey! How's it going?", isSent: false },
@@ -9,10 +17,73 @@ const PREVIEW_MESSAGES = [
 
 const SettingsPage = () => {
   const { theme, setTheme } = useThemeStore();
+  const [notificationPermission, setNotificationPermission] = useState(getNotificationPermission());
+  const [notificationsEnabled, setNotificationsEnabled] = useState(areNotificationsEnabled());
+
+  useEffect(() => {
+    setNotificationPermission(getNotificationPermission());
+    setNotificationsEnabled(areNotificationsEnabled());
+  }, []);
+
+  const handleEnableNotifications = async () => {
+    const permission = await requestNotificationPermission();
+    setNotificationPermission(permission);
+    setNotificationsEnabled(areNotificationsEnabled());
+
+    if (permission === "granted") {
+      toast.success("Browser notifications enabled");
+    } else if (permission === "denied") {
+      toast.error("Notifications are blocked in this browser");
+    } else {
+      toast.error("Browser notifications are not supported");
+    }
+  };
+
+  const handleDisableNotifications = () => {
+    saveNotificationsEnabled(false);
+    setNotificationsEnabled(false);
+    toast.success("Browser notifications disabled");
+  };
+
+  const isNotificationBlocked = notificationPermission === "denied";
+  const isNotificationUnsupported = notificationPermission === "unsupported";
 
   return (
     <div className="h-screen container mx-auto px-4 pt-20 max-w-5xl">
       <div className="space-y-6">
+        <div className="flex flex-col gap-3 rounded-lg border border-base-300 bg-base-100 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold">Browser Notifications</h2>
+              <p className="text-sm text-base-content/70">
+                {notificationsEnabled
+                  ? "Enabled"
+                  : isNotificationBlocked
+                    ? "Blocked"
+                    : isNotificationUnsupported
+                      ? "Not supported"
+                      : "Disabled"}
+              </p>
+            </div>
+            {notificationsEnabled ? (
+              <button type="button" className="btn btn-outline" onClick={handleDisableNotifications}>
+                <BellOff className="size-4" />
+                Disable
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleEnableNotifications}
+                disabled={isNotificationUnsupported}
+              >
+                <Bell className="size-4" />
+                Enable
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold">Theme</h2>
           <p className="text-sm text-base-content/70">Choose a theme for your chat interface</p>

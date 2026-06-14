@@ -7,6 +7,7 @@ import { Plus, Users } from "lucide-react";
 
 const Sidebar = () => {
   const {
+    addUnreadForMessage,
     getUsers,
     users,
     groups,
@@ -14,11 +15,15 @@ const Sidebar = () => {
     setSelectedChat,
     isUsersLoading,
     addIncomingGroup,
+    updateGroupInState,
+    updateUserPresence,
+    removeGroupFromState,
   } = useChatStore();
 
   const { onlineUsers, socket } = useAuthStore();
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     getUsers();
@@ -28,12 +33,39 @@ const Sidebar = () => {
     if (!socket) return;
 
     socket.on("newGroup", addIncomingGroup);
-    return () => socket.off("newGroup", addIncomingGroup);
-  }, [socket, addIncomingGroup]);
+    socket.on("groupUpdated", updateGroupInState);
+    socket.on("groupRemoved", ({ groupId }) => removeGroupFromState(groupId));
+    socket.on("newMessage", addUnreadForMessage);
+    socket.on("userLastSeen", updateUserPresence);
+
+    return () => {
+      socket.off("newGroup", addIncomingGroup);
+      socket.off("groupUpdated", updateGroupInState);
+      socket.off("groupRemoved");
+      socket.off("newMessage", addUnreadForMessage);
+      socket.off("userLastSeen", updateUserPresence);
+    };
+  }, [
+    socket,
+    addIncomingGroup,
+    updateGroupInState,
+    updateUserPresence,
+    removeGroupFromState,
+    addUnreadForMessage,
+  ]);
+
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
 
   const filteredUsers = showOnlineOnly
     ? users.filter((user) => onlineUsers.includes(user._id))
     : users;
+  const searchedUsers = filteredUsers.filter((user) => {
+    const searchableText = `${user.fullName} ${user.username || ""} ${user.email || ""}`.toLowerCase();
+    return searchableText.includes(normalizedSearchQuery);
+  });
+  const searchedGroups = groups.filter((group) =>
+    group.name.toLowerCase().includes(normalizedSearchQuery)
+  );
 
   if (isUsersLoading) return <SidebarSkeleton />;
 
@@ -66,15 +98,22 @@ const Sidebar = () => {
           </label>
           <span className="text-xs text-zinc-500">({onlineUsers.length - 1} online)</span>
         </div>
+        <input
+          type="text"
+          className="input input-bordered input-sm w-full mt-3 hidden lg:block"
+          placeholder="Search chats..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
       </div>
 
       <div className="overflow-y-auto w-full py-3">
-        {groups.length > 0 && (
+        {searchedGroups.length > 0 && (
           <>
             <div className="hidden lg:block px-3 pb-2 text-xs font-semibold uppercase text-base-content/50">
               Groups
             </div>
-            {groups.map((group) => (
+            {searchedGroups.map((group) => (
               <button
                 key={group._id}
                 onClick={() => setSelectedChat({ ...group, isGroup: true })}
@@ -85,9 +124,22 @@ const Sidebar = () => {
                 `}
               >
                 <div className="relative mx-auto lg:mx-0">
-                  <div className="size-12 rounded-full bg-primary/15 text-primary flex items-center justify-center">
-                    <Users className="size-6" />
-                  </div>
+                  {group.avatar ? (
+                    <img
+                      src={group.avatar}
+                      alt={group.name}
+                      className="size-12 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="size-12 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+                      <Users className="size-6" />
+                    </div>
+                  )}
+                  {group.unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-primary text-primary-content text-xs flex items-center justify-center">
+                      {group.unreadCount > 99 ? "99+" : group.unreadCount}
+                    </span>
+                  )}
                 </div>
 
                 <div className="hidden lg:block text-left min-w-0">
@@ -102,7 +154,7 @@ const Sidebar = () => {
         <div className="hidden lg:block px-3 py-2 text-xs font-semibold uppercase text-base-content/50">
           Contacts
         </div>
-        {filteredUsers.map((user) => (
+        {searchedUsers.map((user) => (
           <button
             key={user._id}
             onClick={() => setSelectedChat({ ...user, isGroup: false })}
@@ -124,21 +176,34 @@ const Sidebar = () => {
                   rounded-full ring-2 ring-zinc-900"
                 />
               )}
+              {user.unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-primary text-primary-content text-xs flex items-center justify-center">
+                  {user.unreadCount > 99 ? "99+" : user.unreadCount}
+                </span>
+              )}
             </div>
 
             {/* User info - only visible on larger screens */}
             <div className="hidden lg:block text-left min-w-0">
               <div className="font-medium truncate">{user.fullName}</div>
               <div className="text-sm text-zinc-400">
-                {onlineUsers.includes(user._id) ? "Online" : "Offline"}
+                {onlineUsers.includes(user._id)
+                  ? "Online"
+                  : user.username
+                    ? `@${user.username}`
+                    : "Offline"}
               </div>
             </div>
           </button>
         ))}
 
-        {filteredUsers.length === 0 && (
+        {searchedUsers.length === 0 && searchedGroups.length === 0 && (
           <div className="text-center text-zinc-500 py-4">
-            {showOnlineOnly ? "No online users" : "No contacts yet"}
+            {normalizedSearchQuery
+              ? "No chats found"
+              : showOnlineOnly
+                ? "No online users"
+                : "No contacts yet"}
           </div>
         )}
       </div>

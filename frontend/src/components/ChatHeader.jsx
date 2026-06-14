@@ -1,10 +1,45 @@
-import { Users, X } from "lucide-react";
+import { Settings, Users, X } from "lucide-react";
+import { useState } from "react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
+import GroupSettingsModal from "./GroupSettingsModal";
+
+const formatLastSeen = (date) => {
+  if (!date) return "Offline";
+
+  const lastSeenDate = new Date(date);
+  const diffInSeconds = Math.floor((Date.now() - lastSeenDate.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return "Last seen just now";
+  if (diffInSeconds < 3600) {
+    const minutes = Math.floor(diffInSeconds / 60);
+    return `Last seen ${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  }
+  if (diffInSeconds < 86400) {
+    const hours = Math.floor(diffInSeconds / 3600);
+    return `Last seen ${hours} hour${hours === 1 ? "" : "s"} ago`;
+  }
+
+  return `Last seen ${lastSeenDate.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  })}`;
+};
 
 const ChatHeader = () => {
-  const { selectedChat, setSelectedChat } = useChatStore();
+  const { selectedChat, setSelectedChat, typingUsers } = useChatStore();
   const { onlineUsers } = useAuthStore();
+  const [isGroupSettingsOpen, setIsGroupSettingsOpen] = useState(false);
+  const typingNames = Object.values(typingUsers);
+  const typingText =
+    typingNames.length === 0
+      ? ""
+      : selectedChat.isGroup && typingNames.length > 1
+        ? `${typingNames[0]} and ${typingNames.length - 1} other${typingNames.length > 2 ? "s" : ""} are typing...`
+        : `${typingNames[0]} is typing...`;
+  const directChatStatus = onlineUsers.includes(selectedChat._id)
+    ? "Online"
+    : formatLastSeen(selectedChat.lastSeen);
 
   return (
     <div className="p-2.5 border-b border-base-300">
@@ -14,9 +49,13 @@ const ChatHeader = () => {
           <div className="avatar">
             <div className="size-10 rounded-full relative">
               {selectedChat.isGroup ? (
-                <div className="size-10 rounded-full bg-primary/15 text-primary flex items-center justify-center">
-                  <Users className="size-5" />
-                </div>
+                selectedChat.avatar ? (
+                  <img src={selectedChat.avatar} alt={selectedChat.name} />
+                ) : (
+                  <div className="size-10 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+                    <Users className="size-5" />
+                  </div>
+                )
               ) : (
                 <img src={selectedChat.profilePic || "/avatar.png"} alt={selectedChat.fullName} />
               )}
@@ -29,20 +68,29 @@ const ChatHeader = () => {
               {selectedChat.isGroup ? selectedChat.name : selectedChat.fullName}
             </h3>
             <p className="text-sm text-base-content/70">
-              {selectedChat.isGroup
-                ? `${selectedChat.members.length} members`
-                : onlineUsers.includes(selectedChat._id)
-                  ? "Online"
-                  : "Offline"}
+              {typingText ||
+                (selectedChat.isGroup
+                  ? `${selectedChat.members.length} members`
+                  : directChatStatus)}
             </p>
           </div>
         </div>
 
-        {/* Close button */}
-        <button onClick={() => setSelectedChat(null)}>
-          <X />
-        </button>
+        <div className="flex items-center gap-1">
+          {selectedChat.isGroup && (
+            <button
+              className="btn btn-ghost btn-sm btn-circle"
+              onClick={() => setIsGroupSettingsOpen(true)}
+            >
+              <Settings className="size-4" />
+            </button>
+          )}
+          <button className="btn btn-ghost btn-sm btn-circle" onClick={() => setSelectedChat(null)}>
+            <X className="size-4" />
+          </button>
+        </div>
       </div>
+      {isGroupSettingsOpen && <GroupSettingsModal onClose={() => setIsGroupSettingsOpen(false)} />}
     </div>
   );
 };

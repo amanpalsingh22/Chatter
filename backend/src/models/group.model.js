@@ -9,6 +9,10 @@ const groupSchema = new mongoose.Schema(
       minlength: 2,
       maxlength: 60,
     },
+    avatar: {
+      type: String,
+      default: "",
+    },
     members: [
       {
         type: mongoose.Schema.Types.ObjectId,
