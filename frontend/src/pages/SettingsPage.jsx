@@ -6,7 +6,8 @@ import {
   requestNotificationPermission,
   setNotificationsEnabled as saveNotificationsEnabled,
 } from "../lib/notifications";
-import { Bell, BellOff, Send } from "lucide-react";
+import { isPresencePulseEnabled, setPresencePulseEnabled as savePresencePulseEnabled } from "../lib/presencePulse";
+import { Activity, Bell, BellOff, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
@@ -19,10 +20,12 @@ const SettingsPage = () => {
   const { theme, setTheme } = useThemeStore();
   const [notificationPermission, setNotificationPermission] = useState(getNotificationPermission());
   const [notificationsEnabled, setNotificationsEnabled] = useState(areNotificationsEnabled());
+  const [presencePulseEnabled, setPresencePulseEnabled] = useState(isPresencePulseEnabled());
 
   useEffect(() => {
     setNotificationPermission(getNotificationPermission());
     setNotificationsEnabled(areNotificationsEnabled());
+    setPresencePulseEnabled(isPresencePulseEnabled());
   }, []);
 
   const handleEnableNotifications = async () => {
@@ -47,6 +50,13 @@ const SettingsPage = () => {
 
   const isNotificationBlocked = notificationPermission === "denied";
   const isNotificationUnsupported = notificationPermission === "unsupported";
+
+  const handlePresencePulseToggle = () => {
+    const nextValue = !presencePulseEnabled;
+    savePresencePulseEnabled(nextValue);
+    setPresencePulseEnabled(nextValue);
+    toast.success(nextValue ? "Presence pulse enabled" : "Presence pulse disabled");
+  };
 
   return (
     <div className="h-screen container mx-auto px-4 pt-20 max-w-5xl">
@@ -81,6 +91,25 @@ const SettingsPage = () => {
                 Enable
               </button>
             )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-lg border border-base-300 bg-base-100 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold">Presence Pulse</h2>
+              <p className="text-sm text-base-content/70">
+                {presencePulseEnabled ? "Enabled" : "Disabled"}
+              </p>
+            </div>
+            <button
+              type="button"
+              className={presencePulseEnabled ? "btn btn-outline" : "btn btn-primary"}
+              onClick={handlePresencePulseToggle}
+            >
+              <Activity className="size-4" />
+              {presencePulseEnabled ? "Disable" : "Enable"}
+            </button>
           </div>
         </div>
 

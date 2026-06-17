@@ -1,5 +1,5 @@
 import { useChatStore } from "../store/useChatStore";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import ChatHeader from "./ChatHeader";
 import MessageInput from "./MessageInput";
@@ -22,14 +22,23 @@ const ChatContainer = () => {
     setReplyTo,
     markMessagesAsRead,
     shouldScrollToBottom,
+    syncPresenceView,
+    stopPresenceView,
     subscribeToMessages,
     unsubscribeFromMessages,
   } = useChatStore();
   const { authUser } = useAuthStore();
-  const messageEndRef = useRef(null);
+  const messageListRef = useRef(null);
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingText, setEditingText] = useState("");
+
+  const scrollToLatestMessage = useCallback(() => {
+    const messageList = messageListRef.current;
+    if (!messageList) return;
+
+    messageList.scrollTop = messageList.scrollHeight;
+  }, []);
 
   const getSenderId = (senderId) => (typeof senderId === "object" ? senderId._id : senderId);
   const getReceiptUserId = (receipt) =>
@@ -147,14 +156,66 @@ const ChatContainer = () => {
   }, [markMessagesAsRead, selectedChat._id]);
 
   useEffect(() => {
-    if (shouldScrollToBottom && messageEndRef.current && messages) {
-      messageEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages, shouldScrollToBottom]);
+    const syncCurrentPresenceView = () => {
+      syncPresenceView();
+    };
+    const stopCurrentPresenceView = () => {
+      stopPresenceView();
+    };
+
+    syncCurrentPresenceView();
+
+    document.addEventListener("visibilitychange", syncCurrentPresenceView);
+    window.addEventListener("focus", syncCurrentPresenceView);
+    window.addEventListener("pagehide", stopCurrentPresenceView);
+
+    return () => {
+      document.removeEventListener("visibilitychange", syncCurrentPresenceView);
+      window.removeEventListener("focus", syncCurrentPresenceView);
+      window.removeEventListener("pagehide", stopCurrentPresenceView);
+      stopCurrentPresenceView();
+    };
+  }, [selectedChat._id, selectedChat.isGroup, stopPresenceView, syncPresenceView]);
+
+  useLayoutEffect(() => {
+    if (!shouldScrollToBottom) return;
+    if (isMessagesLoading) return;
+
+    scrollToLatestMessage();
+  }, [
+    filteredMessages.length,
+    isMessagesLoading,
+    scrollToLatestMessage,
+    selectedChat._id,
+    shouldScrollToBottom,
+  ]);
+
+  useEffect(() => {
+    if (!shouldScrollToBottom) return;
+    if (isMessagesLoading) return;
+
+    const frameId = requestAnimationFrame(() => {
+      scrollToLatestMessage();
+    });
+    const settleTimeoutId = setTimeout(scrollToLatestMessage, 80);
+    const lateSettleTimeoutId = setTimeout(scrollToLatestMessage, 250);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      clearTimeout(settleTimeoutId);
+      clearTimeout(lateSettleTimeoutId);
+    };
+  }, [
+    filteredMessages.length,
+    isMessagesLoading,
+    scrollToLatestMessage,
+    selectedChat._id,
+    shouldScrollToBottom,
+  ]);
 
   if (isMessagesLoading) {
     return (
-      <div className="flex-1 flex flex-col overflow-auto">
+      <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         <ChatHeader />
         <MessageSkeleton />
         <MessageInput />
@@ -163,7 +224,7 @@ const ChatContainer = () => {
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-auto">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
       <ChatHeader />
 
       <div className="px-4 pt-3">
@@ -179,7 +240,7 @@ const ChatContainer = () => {
         </label>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref={messageListRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
         {messagePagination.hasMore && (
           <div className="flex justify-center">
             <button
@@ -197,7 +258,6 @@ const ChatContainer = () => {
           <div
             key={message._id}
             className={`chat ${getSenderId(message.senderId) === authUser._id ? "chat-end" : "chat-start"}`}
-            ref={messageEndRef}
           >
             <div className=" chat-image avatar">
               <div className="size-10 rounded-full border">
@@ -294,6 +354,7 @@ const ChatContainer = () => {
                       src={message.image}
                       alt="Attachment"
                       className="sm:max-w-[200px] rounded-md mb-2"
+                      onLoad={() => shouldScrollToBottom && scrollToLatestMessage()}
                     />
                   )}
                   {message.text && <p>{message.text}</p>}

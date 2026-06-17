@@ -2,6 +2,7 @@ import { create } from "zustand";
 import toast from "react-hot-toast";
 import { axiosInstance } from "../lib/axios";
 import { useAuthStore } from "./useAuthStore";
+import { isPresencePulseEnabled } from "../lib/presencePulse";
 
 const MESSAGE_PAGE_LIMIT = 30;
 const typingTimeouts = new Map();
@@ -91,6 +92,8 @@ export const useChatStore = create((set, get) => ({
   isSendingMessage: false,
   shouldScrollToBottom: true,
   typingUsers: {},
+  presencePulseUsers: {},
+  activePresenceRecipientId: null,
 
   getUsers: async () => {
     set({ isUsersLoading: true });
@@ -440,6 +443,10 @@ export const useChatStore = create((set, get) => ({
       recipientIds: getRecipientIds(selectedChat, authUser),
       fullName: authUser.fullName,
     });
+
+    if (!selectedChat.isGroup) {
+      get().stopPresenceView(selectedChat._id);
+    }
   },
 
   stopTyping: () => {
@@ -452,12 +459,75 @@ export const useChatStore = create((set, get) => ({
       isGroup: selectedChat.isGroup,
       recipientIds: getRecipientIds(selectedChat, authUser),
     });
+
+    if (!selectedChat.isGroup) {
+      get().syncPresenceView();
+    }
   },
 
   removeTypingUser: (userId) => {
     const nextTypingUsers = { ...get().typingUsers };
     delete nextTypingUsers[userId];
     set({ typingUsers: nextTypingUsers });
+  },
+  handlePresencePulseStart: ({ userId }) => {
+    if (!userId || !isPresencePulseEnabled()) return;
+
+    set({
+      presencePulseUsers: {
+        ...get().presencePulseUsers,
+        [userId]: true,
+      },
+    });
+  },
+
+  handlePresencePulseStop: ({ userId }) => {
+    if (!userId) return;
+
+    const nextPresencePulseUsers = { ...get().presencePulseUsers };
+    delete nextPresencePulseUsers[userId];
+    set({ presencePulseUsers: nextPresencePulseUsers });
+  },
+
+  startPresenceView: (recipientId) => {
+    const { socket, authUser } = useAuthStore.getState();
+    const { activePresenceRecipientId } = get();
+    if (!socket || !authUser || !recipientId || recipientId === authUser._id) return;
+    if (activePresenceRecipientId === recipientId) return;
+
+    if (activePresenceRecipientId) {
+      socket.emit("presence:view:stop", { recipientId: activePresenceRecipientId });
+    }
+
+    socket.emit("presence:view:start", { recipientId });
+    set({ activePresenceRecipientId: recipientId });
+  },
+
+  stopPresenceView: (recipientId = get().activePresenceRecipientId) => {
+    const socket = useAuthStore.getState().socket;
+    if (!socket || !recipientId) return;
+
+    socket.emit("presence:view:stop", { recipientId });
+
+    if (get().activePresenceRecipientId === recipientId) {
+      set({ activePresenceRecipientId: null });
+    }
+  },
+
+  syncPresenceView: () => {
+    const { selectedChat } = get();
+
+    if (
+      !selectedChat ||
+      selectedChat.isGroup ||
+      !isAppVisible() ||
+      !isPresencePulseEnabled()
+    ) {
+      get().stopPresenceView();
+      return;
+    }
+
+    get().startPresenceView(selectedChat._id);
   },
 
   subscribeToMessages: () => {

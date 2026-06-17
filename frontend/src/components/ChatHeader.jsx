@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import GroupSettingsModal from "./GroupSettingsModal";
+import PresencePulseBadge from "./PresencePulseBadge";
 
 const formatLastSeen = (date) => {
   if (!date) return "Offline";
@@ -27,7 +28,7 @@ const formatLastSeen = (date) => {
 };
 
 const ChatHeader = () => {
-  const { selectedChat, setSelectedChat, typingUsers } = useChatStore();
+  const { selectedChat, setSelectedChat, typingUsers, presencePulseUsers } = useChatStore();
   const { onlineUsers } = useAuthStore();
   const [isGroupSettingsOpen, setIsGroupSettingsOpen] = useState(false);
   const typingNames = Object.values(typingUsers);
@@ -40,26 +41,37 @@ const ChatHeader = () => {
   const directChatStatus = onlineUsers.includes(selectedChat._id)
     ? "Online"
     : formatLastSeen(selectedChat.lastSeen);
+  const isPresencePulsing = !selectedChat.isGroup && presencePulseUsers[selectedChat._id];
+  const isSelectedChatOnline = !selectedChat.isGroup && onlineUsers.includes(selectedChat._id);
 
   return (
     <div className="p-2.5 border-b border-base-300">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           {/* Avatar */}
-          <div className="avatar">
-            <div className="size-10 rounded-full relative">
-              {selectedChat.isGroup ? (
-                selectedChat.avatar ? (
-                  <img src={selectedChat.avatar} alt={selectedChat.name} />
+          <div className="relative">
+            <div className="avatar">
+              <div className="size-10 rounded-full">
+                {selectedChat.isGroup ? (
+                  selectedChat.avatar ? (
+                    <img src={selectedChat.avatar} alt={selectedChat.name} />
+                  ) : (
+                    <div className="size-10 rounded-full bg-primary/15 text-primary flex items-center justify-center">
+                      <Users className="size-5" />
+                    </div>
+                  )
                 ) : (
-                  <div className="size-10 rounded-full bg-primary/15 text-primary flex items-center justify-center">
-                    <Users className="size-5" />
-                  </div>
-                )
-              ) : (
-                <img src={selectedChat.profilePic || "/avatar.png"} alt={selectedChat.fullName} />
-              )}
+                  <img src={selectedChat.profilePic || "/avatar.png"} alt={selectedChat.fullName} />
+                )}
+              </div>
             </div>
+            {isPresencePulsing ? (
+              <PresencePulseBadge className="bottom-0 right-0" isOnline={isSelectedChatOnline} />
+            ) : (
+              isSelectedChatOnline && (
+                <span className="absolute bottom-0 right-0 size-3 bg-green-500 rounded-full ring-2 ring-zinc-900" />
+              )
+            )}
           </div>
 
           {/* User info */}

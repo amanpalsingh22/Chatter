@@ -3,6 +3,7 @@ import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
 import SidebarSkeleton from "./skeletons/SidebarSkeleton";
 import CreateGroupModal from "./CreateGroupModal";
+import PresencePulseBadge from "./PresencePulseBadge";
 import { Plus, Users } from "lucide-react";
 
 const Sidebar = () => {
@@ -18,6 +19,9 @@ const Sidebar = () => {
     updateGroupInState,
     updateUserPresence,
     removeGroupFromState,
+    presencePulseUsers,
+    handlePresencePulseStart,
+    handlePresencePulseStop,
   } = useChatStore();
 
   const { onlineUsers, socket } = useAuthStore();
@@ -37,6 +41,8 @@ const Sidebar = () => {
     socket.on("groupRemoved", ({ groupId }) => removeGroupFromState(groupId));
     socket.on("newMessage", addUnreadForMessage);
     socket.on("userLastSeen", updateUserPresence);
+    socket.on("presence:pulse:start", handlePresencePulseStart);
+    socket.on("presence:pulse:stop", handlePresencePulseStop);
 
     return () => {
       socket.off("newGroup", addIncomingGroup);
@@ -44,6 +50,8 @@ const Sidebar = () => {
       socket.off("groupRemoved");
       socket.off("newMessage", addUnreadForMessage);
       socket.off("userLastSeen", updateUserPresence);
+      socket.off("presence:pulse:start", handlePresencePulseStart);
+      socket.off("presence:pulse:stop", handlePresencePulseStop);
     };
   }, [
     socket,
@@ -52,6 +60,8 @@ const Sidebar = () => {
     updateUserPresence,
     removeGroupFromState,
     addUnreadForMessage,
+    handlePresencePulseStart,
+    handlePresencePulseStop,
   ]);
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
@@ -154,48 +164,57 @@ const Sidebar = () => {
         <div className="hidden lg:block px-3 py-2 text-xs font-semibold uppercase text-base-content/50">
           Contacts
         </div>
-        {searchedUsers.map((user) => (
-          <button
-            key={user._id}
-            onClick={() => setSelectedChat({ ...user, isGroup: false })}
-            className={`
-              w-full p-3 flex items-center gap-3
-              hover:bg-base-300 transition-colors
-              ${selectedChat?._id === user._id ? "bg-base-300 ring-1 ring-base-300" : ""}
-            `}
-          >
-            <div className="relative mx-auto lg:mx-0">
-              <img
-                src={user.profilePic || "/avatar.png"}
-                alt={user.name}
-                className="size-12 object-cover rounded-full"
-              />
-              {onlineUsers.includes(user._id) && (
-                <span
-                  className="absolute bottom-0 right-0 size-3 bg-green-500 
-                  rounded-full ring-2 ring-zinc-900"
-                />
-              )}
-              {user.unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-primary text-primary-content text-xs flex items-center justify-center">
-                  {user.unreadCount > 99 ? "99+" : user.unreadCount}
-                </span>
-              )}
-            </div>
+        {searchedUsers.map((user) => {
+          const isUserOnline = onlineUsers.includes(user._id);
+          const isPresencePulsing = presencePulseUsers[user._id];
 
-            {/* User info - only visible on larger screens */}
-            <div className="hidden lg:block text-left min-w-0">
-              <div className="font-medium truncate">{user.fullName}</div>
-              <div className="text-sm text-zinc-400">
-                {onlineUsers.includes(user._id)
-                  ? "Online"
-                  : user.username
-                    ? `@${user.username}`
-                    : "Offline"}
+          return (
+            <button
+              key={user._id}
+              onClick={() => setSelectedChat({ ...user, isGroup: false })}
+              className={`
+                w-full p-3 flex items-center gap-3
+                hover:bg-base-300 transition-colors
+                ${selectedChat?._id === user._id ? "bg-base-300 ring-1 ring-base-300" : ""}
+              `}
+            >
+              <div className="relative mx-auto lg:mx-0">
+                <img
+                  src={user.profilePic || "/avatar.png"}
+                  alt={user.name}
+                  className="size-12 object-cover rounded-full"
+                />
+                {isPresencePulsing ? (
+                  <PresencePulseBadge className="bottom-0 right-0" isOnline={isUserOnline} />
+                ) : (
+                  isUserOnline && (
+                    <span
+                      className="absolute bottom-0 right-0 size-3 bg-green-500 
+                      rounded-full ring-2 ring-zinc-900"
+                    />
+                  )
+                )}
+                {user.unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-primary text-primary-content text-xs flex items-center justify-center">
+                    {user.unreadCount > 99 ? "99+" : user.unreadCount}
+                  </span>
+                )}
               </div>
-            </div>
-          </button>
-        ))}
+
+              {/* User info - only visible on larger screens */}
+              <div className="hidden lg:block text-left min-w-0">
+                <div className="font-medium truncate">{user.fullName}</div>
+                <div className="text-sm text-zinc-400">
+                  {isUserOnline
+                    ? "Online"
+                    : user.username
+                      ? `@${user.username}`
+                      : "Offline"}
+                </div>
+              </div>
+            </button>
+          );
+        })}
 
         {searchedUsers.length === 0 && searchedGroups.length === 0 && (
           <div className="text-center text-zinc-500 py-4">
