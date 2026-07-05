@@ -10,6 +10,12 @@ let activeMessageHandlers = null;
 
 const getId = (value) => (typeof value === "object" ? value?._id : value);
 
+const getSharedNoteParticipantIds = (note) =>
+  note?.participantIds?.map((participantId) => participantId?.toString?.() || participantId) || [];
+
+const getSharedNoteOtherUserId = (note, authUserId) =>
+  getSharedNoteParticipantIds(note).find((participantId) => participantId !== authUserId);
+
 const hasReceipt = (receipts = [], userId) =>
   receipts.some((receipt) => getId(receipt.userId) === userId);
 
@@ -94,6 +100,11 @@ export const useChatStore = create((set, get) => ({
   typingUsers: {},
   presencePulseUsers: {},
   activePresenceRecipientId: null,
+  sharedNote: null,
+  sharedNoteUpdatedChatIds: {},
+  isSharedNoteOpen: false,
+  isSharedNoteLoading: false,
+  isSharedNoteSaving: false,
 
   getUsers: async () => {
     set({ isUsersLoading: true });
@@ -168,6 +179,92 @@ export const useChatStore = create((set, get) => ({
     } finally {
       set({ isLoadingOlderMessages: false });
     }
+  },
+  setSharedNoteOpen: (isSharedNoteOpen) => {
+    const selectedChat = get().selectedChat;
+    if (!isSharedNoteOpen || selectedChat?.isGroup || !selectedChat?._id) {
+      set({ isSharedNoteOpen });
+      return;
+    }
+
+    const nextUpdatedChatIds = { ...get().sharedNoteUpdatedChatIds };
+    delete nextUpdatedChatIds[selectedChat._id];
+    set({ isSharedNoteOpen, sharedNoteUpdatedChatIds: nextUpdatedChatIds });
+  },
+  getSharedNote: async (userId) => {
+    if (!userId) return;
+
+    set({ isSharedNoteLoading: true });
+    try {
+      const res = await axiosInstance.get(`/messages/notes/direct/${userId}`);
+      set({ sharedNote: res.data });
+      return res.data;
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to load notebook");
+      throw error;
+    } finally {
+      set({ isSharedNoteLoading: false });
+    }
+  },
+  saveSharedNote: async ({ notebook, scope = "shared" }) => {
+    const { selectedChat } = get();
+    if (!selectedChat || selectedChat.isGroup) return null;
+
+    set({ isSharedNoteSaving: true });
+    try {
+      const res = await axiosInstance.patch(`/messages/notes/direct/${selectedChat._id}`, {
+        notebook,
+        scope,
+      });
+      set({ sharedNote: res.data });
+      return res.data;
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to save notebook");
+      throw error;
+    } finally {
+      set({ isSharedNoteSaving: false });
+    }
+  },
+  applySharedNoteUpdate: (note) => {
+    const { selectedChat } = get();
+    const authUser = useAuthStore.getState().authUser;
+    if (!authUser) return;
+
+    const participantIds = getSharedNoteParticipantIds(note);
+    if (!participantIds.includes(authUser._id)) return;
+
+    const otherUserId = getSharedNoteOtherUserId(note, authUser._id);
+    const isSelectedDirectChat =
+      selectedChat && !selectedChat.isGroup && selectedChat._id === otherUserId;
+    const editorId = getId(note.lastEditedBy);
+    const wasEditedByCurrentUser = editorId === authUser._id;
+    const shouldShowUpdatedBadge =
+      otherUserId && !wasEditedByCurrentUser && (!isSelectedDirectChat || !get().isSharedNoteOpen);
+
+    const nextState = {};
+
+    if (isSelectedDirectChat) {
+      nextState.sharedNote = {
+        ...(get().sharedNote || {}),
+        ...note,
+        private: note.private || get().sharedNote?.private || null,
+      };
+    }
+
+    if (shouldShowUpdatedBadge) {
+      nextState.sharedNoteUpdatedChatIds = {
+        ...get().sharedNoteUpdatedChatIds,
+        [otherUserId]: true,
+      };
+    }
+
+    if (Object.keys(nextState).length > 0) set(nextState);
+  },
+  clearSharedNoteUpdated: (userId) => {
+    if (!userId) return;
+    const nextUpdatedChatIds = { ...get().sharedNoteUpdatedChatIds };
+    delete nextUpdatedChatIds[userId];
+    set({ sharedNoteUpdatedChatIds: nextUpdatedChatIds });
   },
   createGroup: async ({ name, memberIds }) => {
     try {
@@ -659,6 +756,8 @@ export const useChatStore = create((set, get) => ({
       selectedChat,
       messages: [],
       replyTo: null,
+      sharedNote: null,
+      isSharedNoteOpen: false,
       messagePagination: { hasMore: false, nextCursor: null },
       shouldScrollToBottom: true,
       typingUsers: {},

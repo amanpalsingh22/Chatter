@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import ChatHeader from "./ChatHeader";
 import MessageInput from "./MessageInput";
 import MessageSkeleton from "./skeletons/MessageSkeleton";
+import SharedNotebookPanel from "./SharedNotebookPanel";
 import { useAuthStore } from "../store/useAuthStore";
 import { formatMessageTime } from "../lib/utils";
 import { Check, CheckCheck, Pencil, Reply, Search, Trash2, X } from "lucide-react";
@@ -224,7 +225,7 @@ const ChatContainer = () => {
   }
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+    <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
       <ChatHeader />
 
       <div className="px-4 pt-3">
@@ -373,6 +374,7 @@ const ChatContainer = () => {
       </div>
 
       <MessageInput />
+      <SharedNotebookPanel />
     </div>
   );
 };

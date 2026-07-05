@@ -1,6 +1,7 @@
 import User from "../models/user.model.js";
 import Message from "../models/message.model.js";
 import Group from "../models/group.model.js";
+import SharedNote from "../models/sharedNote.model.js";
 
 import cloudinary from "../lib/cloudinary.js";
 import { getOnlineSocketIds, io } from "../lib/socket.js";
@@ -17,6 +18,14 @@ const messagePopulate = [
     populate: { path: "senderId", select: "fullName username" },
   },
 ];
+const sharedNotePopulate = { path: "lastEditedBy", select: "fullName username profilePic" };
+const NOTE_CONTENT_MAX_LENGTH = 20000;
+const NOTE_SECTION_MAX_LENGTH = 8000;
+const NOTE_TITLE_MAX_LENGTH = 80;
+const NOTE_TODO_MAX_LENGTH = 250;
+const NOTE_TODO_LIMIT = 50;
+const NOTE_SCOPES = new Set(["shared", "private"]);
+const NOTE_SECTION_KEYS = ["important", "memories", "links"];
 
 function getMessagePagination(query) {
   const parsedLimit = Number.parseInt(query.limit, 10);
@@ -78,6 +87,144 @@ function createReceipt(userId, date, dateKey) {
 const getId = (value) => value?._id?.toString?.() || value?.toString?.();
 
 const isSameId = (first, second) => getId(first) === getId(second);
+
+function getDirectParticipantIds(firstUserId, secondUserId) {
+  return [firstUserId.toString(), secondUserId.toString()].sort();
+}
+
+function getDirectParticipantKey(firstUserId, secondUserId) {
+  return getDirectParticipantIds(firstUserId, secondUserId).join(":");
+}
+
+function getDefaultNotebookData(title) {
+  return {
+    title,
+    content: "",
+    sections: {
+      important: "",
+      memories: "",
+      links: "",
+    },
+    todos: [],
+  };
+}
+
+function normalizeNotebookDataForResponse(data, defaultTitle) {
+  const normalizedData = data || {};
+  const sections = normalizedData.sections || {};
+
+  return {
+    title: normalizedData.title || defaultTitle,
+    content: normalizedData.content || "",
+    sections: NOTE_SECTION_KEYS.reduce(
+      (acc, key) => ({
+        ...acc,
+        [key]: sections[key] || "",
+      }),
+      {}
+    ),
+    todos: Array.isArray(normalizedData.todos)
+      ? normalizedData.todos.map((todo) => ({
+          _id: todo._id,
+          text: todo.text || "",
+          completed: Boolean(todo.completed),
+          createdAt: todo.createdAt,
+          updatedAt: todo.updatedAt,
+        }))
+      : [],
+  };
+}
+
+function cleanNotebookHtml(value, maxLength) {
+  if (typeof value !== "string") {
+    throw new Error("Notebook text must be a string");
+  }
+
+  return value
+    .slice(0, maxLength)
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+    .replace(/\son\w+=(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/href=(?:"javascript:[^"]*"|'javascript:[^']*')/gi, 'href="#"');
+}
+
+function cleanNotebookTitle(value) {
+  if (value === undefined || value === null) return "";
+  if (typeof value !== "string") throw new Error("Notebook title must be text");
+  return value.trim().slice(0, NOTE_TITLE_MAX_LENGTH);
+}
+
+function cleanNotebookSections(sections = {}) {
+  return NOTE_SECTION_KEYS.reduce(
+    (acc, key) => ({
+      ...acc,
+      [key]: cleanNotebookHtml(sections[key] || "", NOTE_SECTION_MAX_LENGTH),
+    }),
+    {}
+  );
+}
+
+function cleanNotebookTodos(todos = []) {
+  if (!Array.isArray(todos)) throw new Error("Checklist must be an array");
+
+  return todos
+    .slice(0, NOTE_TODO_LIMIT)
+    .map((todo) => ({
+      text: typeof todo.text === "string" ? todo.text.trim().slice(0, NOTE_TODO_MAX_LENGTH) : "",
+      completed: Boolean(todo.completed),
+    }))
+    .filter((todo) => todo.text);
+}
+
+function cleanNotebookData(notebook = {}) {
+  return {
+    title: cleanNotebookTitle(notebook.title),
+    content: cleanNotebookHtml(notebook.content || "", NOTE_CONTENT_MAX_LENGTH),
+    sections: cleanNotebookSections(notebook.sections),
+    todos: cleanNotebookTodos(notebook.todos),
+  };
+}
+
+function getPrivateNotebook(noteObject, viewerId) {
+  if (!viewerId) return null;
+  return noteObject.privateNotes?.[viewerId.toString()] || null;
+}
+
+function formatSharedNoteResponse(note, participantIds, viewerId) {
+  if (!note) {
+    return {
+      _id: null,
+      participantIds,
+      shared: getDefaultNotebookData("Shared Notebook"),
+      private: getDefaultNotebookData("Private Notebook"),
+      lastEditedBy: null,
+      lastEditedScope: "shared",
+      createdAt: null,
+      updatedAt: null,
+    };
+  }
+
+  const noteObject = note.toObject ? note.toObject({ flattenMaps: true }) : note;
+  const legacySharedContent = noteObject.content || "";
+  const sharedNotebook = {
+    ...(noteObject.shared || {}),
+    content: noteObject.shared?.content ?? legacySharedContent,
+  };
+
+  return {
+    _id: noteObject._id,
+    participantIds: participantIds || noteObject.participants?.map((participant) => getId(participant)),
+    shared: normalizeNotebookDataForResponse(sharedNotebook, "Shared Notebook"),
+    private: normalizeNotebookDataForResponse(
+      getPrivateNotebook(noteObject, viewerId),
+      "Private Notebook"
+    ),
+    lastEditedBy: noteObject.lastEditedBy,
+    lastEditedScope: noteObject.lastEditedScope || "shared",
+    createdAt: noteObject.createdAt,
+    updatedAt: noteObject.updatedAt,
+  };
+}
 
 async function getPopulatedMessage(messageId) {
   return Message.findById(messageId).populate(messagePopulate);
@@ -559,6 +706,100 @@ export const getGroupMessages = async (req, res) => {
     res.status(200).json(formatMessagePage(messages, limit));
   } catch (error) {
     console.log("Error in getGroupMessages controller: ", error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const getDirectSharedNote = async (req, res) => {
+  try {
+    const { id: otherUserId } = req.params;
+    const myId = req.user._id;
+
+    if (!isValidObjectId(otherUserId)) {
+      return res.status(400).json({ message: "Invalid user id" });
+    }
+
+    const otherUser = await User.exists({ _id: otherUserId });
+    if (!otherUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const participantIds = getDirectParticipantIds(myId, otherUserId);
+    const participantKey = getDirectParticipantKey(myId, otherUserId);
+    const note = await SharedNote.findOne({ participantKey }).populate(sharedNotePopulate);
+
+    res.status(200).json(formatSharedNoteResponse(note, participantIds, myId));
+  } catch (error) {
+    console.log("Error in getDirectSharedNote controller: ", error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const updateDirectSharedNote = async (req, res) => {
+  try {
+    const { id: otherUserId } = req.params;
+    const { content, notebook, scope = "shared" } = req.body;
+    const myId = req.user._id;
+    const myIdString = myId.toString();
+
+    if (!isValidObjectId(otherUserId)) {
+      return res.status(400).json({ message: "Invalid user id" });
+    }
+
+    if (!NOTE_SCOPES.has(scope)) {
+      return res.status(400).json({ message: "Invalid notebook scope" });
+    }
+
+    const otherUser = await User.exists({ _id: otherUserId });
+    if (!otherUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    let cleanedNotebook;
+    try {
+      cleanedNotebook = cleanNotebookData(notebook || { content });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+
+    const participantIds = getDirectParticipantIds(myId, otherUserId);
+    const participantKey = getDirectParticipantKey(myId, otherUserId);
+    const update = {
+      participantKey,
+      participants: participantIds,
+      lastEditedBy: myId,
+      lastEditedScope: scope,
+    };
+
+    if (scope === "shared") {
+      update.shared = cleanedNotebook;
+      update.content = cleanedNotebook.content;
+    } else {
+      update[`privateNotes.${myIdString}`] = cleanedNotebook;
+    }
+
+    const note = await SharedNote.findOneAndUpdate(
+      { participantKey },
+      { $set: update },
+      {
+        new: true,
+        runValidators: true,
+        setDefaultsOnInsert: true,
+        upsert: true,
+      }
+    ).populate(sharedNotePopulate);
+    const formattedNote = formatSharedNoteResponse(note, participantIds, myId);
+
+    if (scope === "shared") {
+      emitToUserIds(participantIds, "sharedNote:updated", {
+        ...formatSharedNoteResponse(note, participantIds),
+        private: null,
+      });
+    }
+
+    res.status(200).json(formattedNote);
+  } catch (error) {
+    console.log("Error in updateDirectSharedNote controller: ", error.message);
     res.status(500).json({ error: "Internal server error" });
   }
 };

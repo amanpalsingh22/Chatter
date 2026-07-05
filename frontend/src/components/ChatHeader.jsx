@@ -1,4 +1,4 @@
-import { Settings, Users, X } from "lucide-react";
+import { BookOpen, Settings, Users, X } from "lucide-react";
 import { useState } from "react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
@@ -28,7 +28,14 @@ const formatLastSeen = (date) => {
 };
 
 const ChatHeader = () => {
-  const { selectedChat, setSelectedChat, typingUsers, presencePulseUsers } = useChatStore();
+  const {
+    presencePulseUsers,
+    selectedChat,
+    setSelectedChat,
+    setSharedNoteOpen,
+    sharedNoteUpdatedChatIds,
+    typingUsers,
+  } = useChatStore();
   const { onlineUsers } = useAuthStore();
   const [isGroupSettingsOpen, setIsGroupSettingsOpen] = useState(false);
   const typingNames = Object.values(typingUsers);
@@ -43,6 +50,8 @@ const ChatHeader = () => {
     : formatLastSeen(selectedChat.lastSeen);
   const isPresencePulsing = !selectedChat.isGroup && presencePulseUsers[selectedChat._id];
   const isSelectedChatOnline = !selectedChat.isGroup && onlineUsers.includes(selectedChat._id);
+  const hasNotebookUpdate =
+    !selectedChat.isGroup && Boolean(sharedNoteUpdatedChatIds[selectedChat._id]);
 
   return (
     <div className="p-2.5 border-b border-base-300">
@@ -66,10 +75,10 @@ const ChatHeader = () => {
               </div>
             </div>
             {isPresencePulsing ? (
-              <PresencePulseBadge className="bottom-0 right-0" isOnline={isSelectedChatOnline} />
+              <PresencePulseBadge className="avatar-online-badge" isOnline={isSelectedChatOnline} />
             ) : (
               isSelectedChatOnline && (
-                <span className="absolute bottom-0 right-0 size-3 bg-green-500 rounded-full ring-2 ring-zinc-900" />
+                <span className="avatar-online-badge size-3 bg-green-500 rounded-full" />
               )
             )}
           </div>
@@ -89,6 +98,18 @@ const ChatHeader = () => {
         </div>
 
         <div className="flex items-center gap-1">
+          {!selectedChat.isGroup && (
+            <button
+              className="btn btn-ghost btn-sm btn-circle relative"
+              onClick={() => setSharedNoteOpen(true)}
+              title="Shared notebook"
+            >
+              <BookOpen className="size-4" />
+              {hasNotebookUpdate && (
+                <span className="absolute right-1 top-1 size-2 rounded-full bg-warning" />
+              )}
+            </button>
+          )}
           {selectedChat.isGroup && (
             <button
               className="btn btn-ghost btn-sm btn-circle"

@@ -22,6 +22,8 @@ const Sidebar = () => {
     presencePulseUsers,
     handlePresencePulseStart,
     handlePresencePulseStop,
+    applySharedNoteUpdate,
+    sharedNoteUpdatedChatIds,
   } = useChatStore();
 
   const { onlineUsers, socket } = useAuthStore();
@@ -43,6 +45,7 @@ const Sidebar = () => {
     socket.on("userLastSeen", updateUserPresence);
     socket.on("presence:pulse:start", handlePresencePulseStart);
     socket.on("presence:pulse:stop", handlePresencePulseStop);
+    socket.on("sharedNote:updated", applySharedNoteUpdate);
 
     return () => {
       socket.off("newGroup", addIncomingGroup);
@@ -52,6 +55,7 @@ const Sidebar = () => {
       socket.off("userLastSeen", updateUserPresence);
       socket.off("presence:pulse:start", handlePresencePulseStart);
       socket.off("presence:pulse:stop", handlePresencePulseStop);
+      socket.off("sharedNote:updated", applySharedNoteUpdate);
     };
   }, [
     socket,
@@ -62,6 +66,7 @@ const Sidebar = () => {
     addUnreadForMessage,
     handlePresencePulseStart,
     handlePresencePulseStop,
+    applySharedNoteUpdate,
   ]);
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
@@ -167,6 +172,7 @@ const Sidebar = () => {
         {searchedUsers.map((user) => {
           const isUserOnline = onlineUsers.includes(user._id);
           const isPresencePulsing = presencePulseUsers[user._id];
+          const hasNotebookUpdate = sharedNoteUpdatedChatIds[user._id];
 
           return (
             <button
@@ -185,12 +191,12 @@ const Sidebar = () => {
                   className="size-12 object-cover rounded-full"
                 />
                 {isPresencePulsing ? (
-                  <PresencePulseBadge className="bottom-0 right-0" isOnline={isUserOnline} />
+                  <PresencePulseBadge className="avatar-online-badge" isOnline={isUserOnline} />
                 ) : (
                   isUserOnline && (
                     <span
-                      className="absolute bottom-0 right-0 size-3 bg-green-500 
-                      rounded-full ring-2 ring-zinc-900"
+                      className="avatar-online-badge size-3 bg-green-500 
+                      rounded-full"
                     />
                   )
                 )}
@@ -198,6 +204,12 @@ const Sidebar = () => {
                   <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-primary text-primary-content text-xs flex items-center justify-center">
                     {user.unreadCount > 99 ? "99+" : user.unreadCount}
                   </span>
+                )}
+                {hasNotebookUpdate && (
+                  <span
+                    className="absolute -bottom-1 -left-1 size-3 rounded-full bg-warning ring-2 ring-base-100"
+                    title="Notebook updated"
+                  />
                 )}
               </div>
 

@@ -7,6 +7,7 @@ import {
   editMessage,
   getGroupMessages,
   getGroupsForSidebar,
+  getDirectSharedNote,
   getMessages,
   getUsersForSidebar,
   leaveGroup,
@@ -16,6 +17,7 @@ import {
   removeGroupMember,
   sendGroupMessage,
   sendMessage,
+  updateDirectSharedNote,
   updateGroup,
 } from "../controllers/message.controller.js";
 
@@ -30,6 +32,8 @@ router.delete("/groups/:id/members/:memberId", protectRoute, removeGroupMember);
 router.post("/groups/:id/leave", protectRoute, leaveGroup);
 router.patch("/groups/:id/admin", protectRoute, makeGroupAdmin);
 router.get("/groups/:id", protectRoute, getGroupMessages);
+router.get("/notes/direct/:id", protectRoute, getDirectSharedNote);
+router.patch("/notes/direct/:id", protectRoute, updateDirectSharedNote);
 router.post("/read/group/:id", protectRoute, markGroupMessagesAsRead);
 router.post("/read/:id", protectRoute, markMessagesAsRead);
 router.get("/:id", protectRoute, getMessages);
