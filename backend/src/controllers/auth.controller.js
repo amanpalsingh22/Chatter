@@ -2,6 +2,7 @@ import { generateToken } from "../lib/utils.js";
 import User from "../models/user.model.js";
 import bcrypt from "bcryptjs";
 import cloudinary from "../lib/cloudinary.js";
+import { verifyGoogleCredential } from "../lib/googleAuth.js";
 import {
   isValidEmail,
   isValidUsername,
@@ -117,6 +118,10 @@ export const login = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
+    if (!user.password) {
+      return res.status(400).json({ message: "This account uses Google sign-in" });
+    }
+
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) {
       return res.status(400).json({ message: "Invalid credentials" });
@@ -196,6 +201,78 @@ export const updateProfile = async (req, res) => {
   } catch (error) {
     console.log("error in update profile:", error);
     res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const getGoogleAuthConfig = (req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim() || "";
+
+  res.set("Cache-Control", "public, max-age=300");
+  res.status(200).json({
+    enabled: Boolean(clientId),
+    clientId: clientId || null,
+  });
+};
+
+export const googleLogin = async (req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
+  const credential = req.body?.credential;
+
+  if (!clientId) {
+    return res.status(503).json({ message: "Google sign-in is not configured" });
+  }
+
+  if (typeof credential !== "string" || !credential || credential.length > 10_000) {
+    return res.status(400).json({ message: "Google credential is required" });
+  }
+
+  try {
+    const googleProfile = await verifyGoogleCredential({ credential, audience: clientId });
+    const email = normalizeEmail(googleProfile.email);
+
+    let user = await User.findOne({ googleId: googleProfile.sub });
+
+    if (!user) {
+      user = await User.findOne({ email });
+
+      if (user?.googleId && user.googleId !== googleProfile.sub) {
+        return res.status(409).json({ message: "This email is linked to another Google account" });
+      }
+
+      if (user) {
+        const googleIsAuthoritativeForEmail =
+          email.endsWith("@gmail.com") || Boolean(googleProfile.hd);
+
+        if (!googleIsAuthoritativeForEmail) {
+          return res.status(409).json({
+            message: "An account with this email already exists. Sign in with your password.",
+          });
+        }
+
+        user.googleId = googleProfile.sub;
+        if (!user.profilePic && googleProfile.picture) user.profilePic = googleProfile.picture;
+        await user.save();
+      } else {
+        const fullName = googleProfile.name?.trim() || email.split("@")[0];
+
+        user = await User.create({
+          email,
+          fullName,
+          googleId: googleProfile.sub,
+          profilePic: googleProfile.picture || "",
+          username: await getUniqueUsername({ email, fullName }),
+          lastSeen: new Date(),
+        });
+      }
+    }
+
+    generateToken(user._id, res);
+    const profileUser = await ensureProfileDefaults(user);
+
+    return res.status(200).json(serializeUser(profileUser));
+  } catch (error) {
+    console.log("Error in Google login controller", error.message);
+    return res.status(401).json({ message: "Google sign-in could not be verified" });
   }
 };
 

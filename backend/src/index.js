@@ -21,6 +21,10 @@ dotenv.config({ path: path.join(rootDir, "backend", ".env") });
 
 const PORT = process.env.PORT || 5001;
 
+app.use((req, res, next) => {
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  next();
+});
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(

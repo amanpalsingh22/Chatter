@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 
 import AuthImagePattern from "../components/AuthImagePattern";
 import toast from "react-hot-toast";
+import GoogleAuthButton from "../components/GoogleAuthButton";
 
 const SignUpPage = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -130,6 +131,9 @@ const SignUpPage = () => {
               )}
             </button>
           </form>
+
+          <div className="divider text-xs uppercase text-base-content/50">or</div>
+          <GoogleAuthButton />
 
           <div className="text-center">
             <p className="text-base-content/60">
