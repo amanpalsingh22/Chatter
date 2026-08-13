@@ -314,8 +314,19 @@
   }
 
   .message-bubble-incoming {
-    --message-action-bg: oklch(var(--b2));
+    --incoming-message-bg: color-mix(
+      in oklch,
+      oklch(var(--b2)) 84%,
+      oklch(var(--bc)) 16%
+    );
+    --message-action-bg: var(--incoming-message-bg);
     --message-action-fg: oklch(var(--bc));
+    border: 1px solid oklch(var(--bc) / 0.08);
+    background-color: var(--incoming-message-bg);
+    color: oklch(var(--bc));
+    box-shadow:
+      0 1px 2px oklch(var(--bc) / 0.08),
+      0 4px 12px oklch(var(--bc) / 0.035);
   }
 
   .message-bubble-failed {

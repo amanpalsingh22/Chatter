@@ -653,7 +653,7 @@ const ChatContainer = () => {
                   className={`chat-bubble message-bubble group/message relative flex flex-col overflow-visible ${
                     isOwnMessage
                       ? "message-bubble-outgoing bg-primary text-primary-content"
-                      : "message-bubble-incoming bg-base-200 text-base-content"
+                      : "message-bubble-incoming"
                   } ${message._sendState === "failed" ? "message-bubble-failed" : ""} ${
                     reactionGroups.length > 0 && !message.isDeleted
                       ? "message-bubble-has-reactions"
