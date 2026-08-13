@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { Camera, Crown, LogOut, Trash2, UserPlus, X } from "lucide-react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
+import UserAvatar from "./UserAvatar";
 
 const getId = (value) => (typeof value === "object" ? value?._id : value);
 
@@ -152,11 +153,7 @@ const GroupSettingsModal = ({ onClose }) => {
                     checked={selectedMemberIds.includes(user._id)}
                     onChange={() => toggleMember(user._id)}
                   />
-                  <img
-                    src={user.profilePic || "/avatar.png"}
-                    alt={user.fullName}
-                    className="size-9 rounded-full object-cover"
-                  />
+                  <UserAvatar user={user} sizeClass="size-9" />
                   <span className="text-sm font-medium truncate">{user.fullName}</span>
                 </label>
               ))}
@@ -177,11 +174,7 @@ const GroupSettingsModal = ({ onClose }) => {
                   key={memberId}
                   className="flex items-center gap-3 p-2 rounded-lg hover:bg-base-200"
                 >
-                  <img
-                    src={member.profilePic || "/avatar.png"}
-                    alt={member.fullName}
-                    className="size-9 rounded-full object-cover"
-                  />
+                  <UserAvatar user={member} sizeClass="size-9" />
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">
                       {member.fullName} {memberIsMe ? "(You)" : ""}

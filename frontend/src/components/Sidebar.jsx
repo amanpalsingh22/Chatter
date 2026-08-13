@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
 import SidebarSkeleton from "./skeletons/SidebarSkeleton";
 import CreateGroupModal from "./CreateGroupModal";
 import PresencePulseBadge from "./PresencePulseBadge";
-import { Plus, Users } from "lucide-react";
+import { Plus, Search, Users, X } from "lucide-react";
+import UserAvatar from "./UserAvatar";
 
 const Sidebar = () => {
   const {
@@ -29,11 +30,24 @@ const Sidebar = () => {
   const { onlineUsers, socket } = useAuthStore();
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [isContactSearchOpen, setIsContactSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
     getUsers();
   }, [getUsers]);
+
+  useEffect(() => {
+    if (!isContactSearchOpen) return;
+    const frameId = requestAnimationFrame(() => searchInputRef.current?.focus());
+    return () => cancelAnimationFrame(frameId);
+  }, [isContactSearchOpen]);
+
+  const closeContactSearch = () => {
+    setIsContactSearchOpen(false);
+    setSearchQuery("");
+  };
 
   useEffect(() => {
     if (!socket) return;
@@ -85,23 +99,33 @@ const Sidebar = () => {
   if (isUsersLoading) return <SidebarSkeleton />;
 
   return (
-    <aside className="h-full w-20 lg:w-72 border-r border-base-300 flex flex-col transition-all duration-200">
-      <div className="border-b border-base-300 w-full p-5">
+    <aside className="h-full w-full md:w-20 lg:w-72 border-r border-base-300 flex flex-col transition-all duration-200">
+      <div className="border-b border-base-300 w-full p-4">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Users className="size-6" />
-            <span className="font-medium hidden lg:block">Chats</span>
+            <span className="font-medium block md:hidden lg:block">Chats</span>
           </div>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm btn-circle"
-            onClick={() => setIsGroupModalOpen(true)}
-            title="Create group"
-          >
-            <Plus className="size-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              className={`btn btn-ghost btn-sm btn-circle ${isContactSearchOpen ? "bg-base-200 text-primary" : ""}`}
+              onClick={() => (isContactSearchOpen ? closeContactSearch() : setIsContactSearchOpen(true))}
+              title={isContactSearchOpen ? "Close contact search" : "Search contacts"}
+            >
+              {isContactSearchOpen ? <X className="size-4" /> : <Search className="size-4" />}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm btn-circle"
+              onClick={() => setIsGroupModalOpen(true)}
+              title="Create group"
+            >
+              <Plus className="size-5" />
+            </button>
+          </div>
         </div>
-        <div className="mt-3 hidden lg:flex items-center gap-2">
+        <div className="mt-3 flex md:hidden lg:flex items-center gap-2">
           <label className="cursor-pointer flex items-center gap-2">
             <input
               type="checkbox"
@@ -113,19 +137,30 @@ const Sidebar = () => {
           </label>
           <span className="text-xs text-zinc-500">({onlineUsers.length - 1} online)</span>
         </div>
-        <input
-          type="text"
-          className="input input-bordered input-sm w-full mt-3 hidden lg:block"
-          placeholder="Search chats..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-        />
+        {isContactSearchOpen && (
+          <label className="sidebar-search-box mt-3 flex md:hidden lg:flex">
+            <Search className="size-4 opacity-55" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search chats"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Escape" && closeContactSearch()}
+            />
+            {searchQuery && (
+              <button type="button" onClick={() => setSearchQuery("")} title="Clear search">
+                <X className="size-3.5" />
+              </button>
+            )}
+          </label>
+        )}
       </div>
 
       <div className="overflow-y-auto w-full py-3">
         {searchedGroups.length > 0 && (
           <>
-            <div className="hidden lg:block px-3 pb-2 text-xs font-semibold uppercase text-base-content/50">
+            <div className="block md:hidden lg:block px-3 pb-2 text-xs font-semibold uppercase text-base-content/50">
               Groups
             </div>
             {searchedGroups.map((group) => (
@@ -138,7 +173,7 @@ const Sidebar = () => {
                   ${selectedChat?._id === group._id ? "bg-base-300 ring-1 ring-base-300" : ""}
                 `}
               >
-                <div className="relative mx-auto lg:mx-0">
+                <div className="relative mx-0 md:mx-auto lg:mx-0">
                   {group.avatar ? (
                     <img
                       src={group.avatar}
@@ -157,7 +192,7 @@ const Sidebar = () => {
                   )}
                 </div>
 
-                <div className="hidden lg:block text-left min-w-0">
+                <div className="block md:hidden lg:block text-left min-w-0">
                   <div className="font-medium truncate">{group.name}</div>
                   <div className="text-sm text-zinc-400">{group.members.length} members</div>
                 </div>
@@ -166,7 +201,7 @@ const Sidebar = () => {
           </>
         )}
 
-        <div className="hidden lg:block px-3 py-2 text-xs font-semibold uppercase text-base-content/50">
+        <div className="block md:hidden lg:block px-3 py-2 text-xs font-semibold uppercase text-base-content/50">
           Contacts
         </div>
         {searchedUsers.map((user) => {
@@ -184,12 +219,8 @@ const Sidebar = () => {
                 ${selectedChat?._id === user._id ? "bg-base-300 ring-1 ring-base-300" : ""}
               `}
             >
-              <div className="relative mx-auto lg:mx-0">
-                <img
-                  src={user.profilePic || "/avatar.png"}
-                  alt={user.name}
-                  className="size-12 object-cover rounded-full"
-                />
+              <div className="relative mx-0 md:mx-auto lg:mx-0">
+                <UserAvatar user={user} sizeClass="size-12" />
                 {isPresencePulsing ? (
                   <PresencePulseBadge className="avatar-online-badge" isOnline={isUserOnline} />
                 ) : (
@@ -214,7 +245,7 @@ const Sidebar = () => {
               </div>
 
               {/* User info - only visible on larger screens */}
-              <div className="hidden lg:block text-left min-w-0">
+              <div className="block md:hidden lg:block text-left min-w-0">
                 <div className="font-medium truncate">{user.fullName}</div>
                 <div className="text-sm text-zinc-400">
                   {isUserOnline

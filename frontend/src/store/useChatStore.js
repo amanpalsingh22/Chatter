@@ -437,21 +437,87 @@ export const useChatStore = create((set, get) => ({
     }
   },
   sendMessage: async (messageData) => {
-    const { selectedChat, messages, isSendingMessage, replyTo } = get();
-    if (!selectedChat) return;
-    if (isSendingMessage) return;
+    const { selectedChat, replyTo } = get();
+    const authUser = useAuthStore.getState().authUser;
+    if (!selectedChat || !authUser) return false;
 
-    set({ isSendingMessage: true });
+    const temporaryId = `pending-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const sendPayload = { ...messageData, replyTo: replyTo?._id || null };
+    const optimisticMessage = {
+      _id: temporaryId,
+      senderId: authUser,
+      receiverId: selectedChat.isGroup ? null : selectedChat._id,
+      groupId: selectedChat.isGroup ? selectedChat._id : null,
+      text: messageData.text,
+      image: messageData.image,
+      replyTo,
+      deliveredTo: [],
+      readBy: [],
+      reactions: [],
+      createdAt: new Date().toISOString(),
+      _sendState: "sending",
+      _sendPayload: sendPayload,
+    };
+
+    set({
+      messages: [...get().messages, optimisticMessage],
+      isSendingMessage: true,
+      shouldScrollToBottom: true,
+      replyTo: null,
+    });
     try {
       const url = selectedChat.isGroup
         ? `/messages/send/group/${selectedChat._id}`
         : `/messages/send/${selectedChat._id}`;
-      const res = await axiosInstance.post(url, { ...messageData, replyTo: replyTo?._id });
-      set({ messages: [...messages, res.data], shouldScrollToBottom: true, replyTo: null });
+      const res = await axiosInstance.post(url, sendPayload);
+      set({
+        messages: get().messages.map((message) =>
+          message._id === temporaryId ? res.data : message
+        ),
+        shouldScrollToBottom: true,
+      });
+      get().touchChatActivity(res.data);
+      return true;
+    } catch (error) {
+      set({
+        messages: get().messages.map((message) =>
+          message._id === temporaryId ? { ...message, _sendState: "failed" } : message
+        ),
+      });
+      toast.error(error.response?.data?.message || "Failed to send message");
+      return false;
+    } finally {
+      set({ isSendingMessage: false });
+    }
+  },
+  retryMessage: async (messageId) => {
+    const message = get().messages.find((item) => item._id === messageId);
+    const selectedChat = get().selectedChat;
+    if (!message?._sendPayload || !selectedChat) return;
+
+    set({
+      messages: get().messages.map((item) =>
+        item._id === messageId ? { ...item, _sendState: "sending" } : item
+      ),
+      isSendingMessage: true,
+    });
+
+    try {
+      const url = selectedChat.isGroup
+        ? `/messages/send/group/${selectedChat._id}`
+        : `/messages/send/${selectedChat._id}`;
+      const res = await axiosInstance.post(url, message._sendPayload);
+      set({
+        messages: get().messages.map((item) => (item._id === messageId ? res.data : item)),
+      });
       get().touchChatActivity(res.data);
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to send message");
-      throw error;
+      set({
+        messages: get().messages.map((item) =>
+          item._id === messageId ? { ...item, _sendState: "failed" } : item
+        ),
+      });
+      toast.error(error.response?.data?.message || "Retry failed");
     } finally {
       set({ isSendingMessage: false });
     }
@@ -483,6 +549,34 @@ export const useChatStore = create((set, get) => ({
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to delete message");
       throw error;
+    }
+  },
+  toggleMessageReaction: async (messageId, emoji) => {
+    const authUser = useAuthStore.getState().authUser;
+    const originalMessage = get().messages.find((message) => message._id === messageId);
+    if (!authUser || !originalMessage || messageId.startsWith("pending-")) return;
+
+    const reactions = originalMessage.reactions || [];
+    const ownReaction = reactions.find((reaction) => getId(reaction.userId) === authUser._id);
+    const optimisticReactions = reactions.filter(
+      (reaction) => getId(reaction.userId) !== authUser._id
+    );
+    if (ownReaction?.emoji !== emoji) {
+      optimisticReactions.push({ userId: authUser._id, emoji, reactedAt: new Date().toISOString() });
+    }
+
+    set({
+      messages: get().messages.map((message) =>
+        message._id === messageId ? { ...message, reactions: optimisticReactions } : message
+      ),
+    });
+
+    try {
+      const res = await axiosInstance.patch(`/messages/${messageId}/reaction`, { emoji });
+      get().updateMessageInState(res.data);
+    } catch (error) {
+      get().updateMessageInState(originalMessage);
+      toast.error(error.response?.data?.message || "Failed to update reaction");
     }
   },
 
@@ -668,6 +762,10 @@ export const useChatStore = create((set, get) => ({
       get().updateMessageInState(updatedMessage);
     };
 
+    const handleMessageReactionUpdated = (updatedMessage) => {
+      get().updateMessageInState(updatedMessage);
+    };
+
     const handleTypingStart = (payload) => {
       const currentChat = get().selectedChat;
       const authUser = useAuthStore.getState().authUser;
@@ -714,6 +812,7 @@ export const useChatStore = create((set, get) => ({
       handleMessagesRead,
       handleMessageUpdated,
       handleMessageDeleted,
+      handleMessageReactionUpdated,
       handleTypingStart,
       handleTypingStop,
     };
@@ -722,6 +821,7 @@ export const useChatStore = create((set, get) => ({
     socket.on("messagesRead", handleMessagesRead);
     socket.on("messageUpdated", handleMessageUpdated);
     socket.on("messageDeleted", handleMessageDeleted);
+    socket.on("messageReactionUpdated", handleMessageReactionUpdated);
     socket.on("typing:start", handleTypingStart);
     socket.on("typing:stop", handleTypingStop);
   },
@@ -735,6 +835,7 @@ export const useChatStore = create((set, get) => ({
       handleMessagesRead,
       handleMessageUpdated,
       handleMessageDeleted,
+      handleMessageReactionUpdated,
       handleTypingStart,
       handleTypingStop,
     } = activeMessageHandlers;
@@ -743,6 +844,7 @@ export const useChatStore = create((set, get) => ({
     socket.off("messagesRead", handleMessagesRead);
     socket.off("messageUpdated", handleMessageUpdated);
     socket.off("messageDeleted", handleMessageDeleted);
+    socket.off("messageReactionUpdated", handleMessageReactionUpdated);
     socket.off("typing:start", handleTypingStart);
     socket.off("typing:stop", handleTypingStop);
     activeMessageHandlers = null;

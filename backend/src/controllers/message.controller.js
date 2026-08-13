@@ -26,6 +26,7 @@ const NOTE_TODO_MAX_LENGTH = 250;
 const NOTE_TODO_LIMIT = 50;
 const NOTE_SCOPES = new Set(["shared", "private"]);
 const NOTE_SECTION_KEYS = ["important", "memories", "links"];
+const MESSAGE_REACTIONS = new Set(["👍", "❤️", "😂", "😮", "😢", "🙏"]);
 
 function getMessagePagination(query) {
   const parsedLimit = Number.parseInt(query.limit, 10);
@@ -956,6 +957,54 @@ export const deleteMessage = async (req, res) => {
     res.status(200).json(populatedMessage);
   } catch (error) {
     console.log("Error in deleteMessage controller: ", error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const toggleMessageReaction = async (req, res) => {
+  try {
+    const { id: messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user._id;
+
+    if (!isValidObjectId(messageId)) {
+      return res.status(400).json({ message: "Invalid message id" });
+    }
+
+    if (!MESSAGE_REACTIONS.has(emoji)) {
+      return res.status(400).json({ message: "Unsupported reaction" });
+    }
+
+    const message = await Message.findById(messageId);
+    if (!message || message.isDeleted) {
+      return res.status(404).json({ message: "Message not found" });
+    }
+
+    const participantIds = await getMessageParticipantIds(message);
+    if (!participantIds.some((participantId) => isSameId(participantId, userId))) {
+      return res.status(403).json({ message: "You cannot react to this message" });
+    }
+
+    const existingReactionIndex = message.reactions.findIndex((reaction) =>
+      isSameId(reaction.userId, userId)
+    );
+    const existingReaction = message.reactions[existingReactionIndex];
+
+    if (existingReactionIndex >= 0) {
+      message.reactions.splice(existingReactionIndex, 1);
+    }
+
+    if (existingReaction?.emoji !== emoji) {
+      message.reactions.push({ userId, emoji, reactedAt: new Date() });
+    }
+
+    await message.save();
+    const populatedMessage = await getPopulatedMessage(message._id);
+    await emitMessageUpdate(populatedMessage, "messageReactionUpdated");
+
+    res.status(200).json(populatedMessage);
+  } catch (error) {
+    console.log("Error in toggleMessageReaction controller: ", error.message);
     res.status(500).json({ error: "Internal server error" });
   }
 };

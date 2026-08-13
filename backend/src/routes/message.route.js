@@ -17,6 +17,7 @@ import {
   removeGroupMember,
   sendGroupMessage,
   sendMessage,
+  toggleMessageReaction,
   updateDirectSharedNote,
   updateGroup,
 } from "../controllers/message.controller.js";
@@ -40,6 +41,7 @@ router.get("/:id", protectRoute, getMessages);
 
 router.post("/send/group/:id", protectRoute, sendGroupMessage);
 router.post("/send/:id", protectRoute, sendMessage);
+router.patch("/:id/reaction", protectRoute, toggleMessageReaction);
 router.patch("/:id", protectRoute, editMessage);
 router.delete("/:id", protectRoute, deleteMessage);
 

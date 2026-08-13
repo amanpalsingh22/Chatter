@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { useChatStore } from "../store/useChatStore";
+import UserAvatar from "./UserAvatar";
 
 const CreateGroupModal = ({ users, onClose }) => {
   const { createGroup } = useChatStore();
@@ -68,11 +69,7 @@ const CreateGroupModal = ({ users, onClose }) => {
                     checked={selectedMemberIds.includes(user._id)}
                     onChange={() => toggleMember(user._id)}
                   />
-                  <img
-                    src={user.profilePic || "/avatar.png"}
-                    alt={user.fullName}
-                    className="size-9 rounded-full object-cover"
-                  />
+                  <UserAvatar user={user} sizeClass="size-9" />
                   <span className="text-sm font-medium truncate">{user.fullName}</span>
                 </label>
               ))}

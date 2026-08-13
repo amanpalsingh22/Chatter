@@ -1,9 +1,11 @@
-import { BookOpen, Settings, Users, X } from "lucide-react";
+import { ArrowLeft, BookOpen, Search, Settings, Users, X } from "lucide-react";
 import { useState } from "react";
 import { useAuthStore } from "../store/useAuthStore";
 import { useChatStore } from "../store/useChatStore";
 import GroupSettingsModal from "./GroupSettingsModal";
 import PresencePulseBadge from "./PresencePulseBadge";
+import UserAvatar from "./UserAvatar";
+import ChatBackgroundPicker from "./ChatBackgroundPicker";
 
 const formatLastSeen = (date) => {
   if (!date) return "Offline";
@@ -27,7 +29,12 @@ const formatLastSeen = (date) => {
   })}`;
 };
 
-const ChatHeader = () => {
+const ChatHeader = ({
+  isSearchOpen = false,
+  onToggleSearch,
+  selectedBackground,
+  onBackgroundChange,
+}) => {
   const {
     presencePulseUsers,
     selectedChat,
@@ -57,6 +64,14 @@ const ChatHeader = () => {
     <div className="p-2.5 border-b border-base-300">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm btn-circle md:hidden"
+            onClick={() => setSelectedChat(null)}
+            title="Back to chats"
+          >
+            <ArrowLeft className="size-5" />
+          </button>
           {/* Avatar */}
           <div className="relative">
             <div className="avatar">
@@ -70,7 +85,7 @@ const ChatHeader = () => {
                     </div>
                   )
                 ) : (
-                  <img src={selectedChat.profilePic || "/avatar.png"} alt={selectedChat.fullName} />
+                  <UserAvatar user={selectedChat} sizeClass="size-10" />
                 )}
               </div>
             </div>
@@ -110,6 +125,22 @@ const ChatHeader = () => {
               )}
             </button>
           )}
+          {selectedBackground && onBackgroundChange && (
+            <ChatBackgroundPicker
+              selectedBackground={selectedBackground}
+              onSelect={onBackgroundChange}
+            />
+          )}
+          {onToggleSearch && (
+            <button
+              type="button"
+              className={`btn btn-ghost btn-sm btn-circle ${isSearchOpen ? "bg-base-200 text-primary" : ""}`}
+              onClick={onToggleSearch}
+              title={isSearchOpen ? "Close message search" : "Search messages"}
+            >
+              {isSearchOpen ? <X className="size-4" /> : <Search className="size-4" />}
+            </button>
+          )}
           {selectedChat.isGroup && (
             <button
               className="btn btn-ghost btn-sm btn-circle"
@@ -118,7 +149,7 @@ const ChatHeader = () => {
               <Settings className="size-4" />
             </button>
           )}
-          <button className="btn btn-ghost btn-sm btn-circle" onClick={() => setSelectedChat(null)}>
+          <button className="btn btn-ghost btn-sm btn-circle hidden md:inline-flex" onClick={() => setSelectedChat(null)}>
             <X className="size-4" />
           </button>
         </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuthStore } from "../store/useAuthStore";
 import { AtSign, Calendar, Camera, Clock, Info, Loader2, Mail, Save, User } from "lucide-react";
 import toast from "react-hot-toast";
+import UserAvatar from "../components/UserAvatar";
 
 const formatProfileDate = (date) => {
   if (!date) return "Not available";
@@ -98,10 +99,13 @@ const ProfilePage = () => {
 
           <div className="flex flex-col items-center gap-4">
             <div className="relative">
-              <img
-                src={selectedImg || authUser?.profilePic || "/avatar.png"}
+              <UserAvatar
+                user={authUser}
+                src={selectedImg || authUser?.profilePic}
+                name={authUser?.fullName}
                 alt="Profile"
-                className="size-32 rounded-full object-cover border-4 border-base-300"
+                sizeClass="size-32"
+                className="border-4 border-base-300"
               />
               <label
                 htmlFor="avatar-upload"
