@@ -47,6 +47,24 @@ const MessageInput = () => {
     return () => cancelAnimationFrame(frameId);
   }, [replyTo]);
 
+  useEffect(() => {
+    const handlePrefillMessage = (event) => {
+      if (event.detail?.chatId !== selectedChat?._id) return;
+      const suggestedText = event.detail?.text || "Hi 👋";
+
+      setText((currentText) => {
+        const nextText = currentText.trim() ? currentText : suggestedText;
+        draftsByChat.set(selectedChat._id, { text: nextText, image: imagePreview });
+        return nextText;
+      });
+
+      requestAnimationFrame(() => textInputRef.current?.focus());
+    };
+
+    window.addEventListener("chatty:prefill-message", handlePrefillMessage);
+    return () => window.removeEventListener("chatty:prefill-message", handlePrefillMessage);
+  }, [imagePreview, selectedChat?._id]);
+
   useEffect(resizeComposer, [text]);
 
   const saveDraft = (nextText, nextImage = imagePreview) => {

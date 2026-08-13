@@ -16,6 +16,7 @@ import {
   Clock3,
   Copy,
   Download,
+  MessageCircle,
   Pencil,
   Reply,
   RotateCcw,
@@ -137,6 +138,17 @@ const ChatContainer = () => {
       return;
     }
     setIsMessageSearchOpen(true);
+  };
+
+  const handleStartConversation = () => {
+    window.dispatchEvent(
+      new CustomEvent("chatty:prefill-message", {
+        detail: {
+          chatId: selectedChat._id,
+          text: selectedChat.isGroup ? "Hi everyone 👋" : "Hi 👋",
+        },
+      })
+    );
   };
 
   const getReceiptUserId = (receipt) => getId(receipt.userId);
@@ -589,6 +601,26 @@ const ChatContainer = () => {
             >
               {isLoadingOlderMessages ? "Loading..." : "Load earlier messages"}
             </button>
+          </div>
+        )}
+
+        {messages.length === 0 && !normalizedSearchQuery && (
+          <div className="empty-conversation-state">
+            <div className="empty-conversation-card">
+              <div className="empty-conversation-icon" aria-hidden="true">
+                <MessageCircle className="size-7" strokeWidth={1.8} />
+              </div>
+              <h2>No messages yet</h2>
+              <p>
+                {selectedChat.isGroup
+                  ? `Be the first to start a conversation in ${selectedChat.name}.`
+                  : `Say hi to ${selectedChat.fullName || "them"} and start the conversation.`}
+              </p>
+              <button type="button" onClick={handleStartConversation}>
+                {selectedChat.isGroup ? "Start chatting" : "Say hi"}
+                <span aria-hidden="true">👋</span>
+              </button>
+            </div>
           </div>
         )}
 

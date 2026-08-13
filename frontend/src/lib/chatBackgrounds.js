@@ -9,7 +9,7 @@ export const CHAT_BACKGROUNDS = [
   { id: "plain", name: "Plain", description: "No background pattern" },
 ];
 
-export const DEFAULT_CHAT_BACKGROUND = "stars";
+export const DEFAULT_CHAT_BACKGROUND = "plain";
 
 export const isValidChatBackground = (backgroundId) =>
   CHAT_BACKGROUNDS.some(({ id }) => id === backgroundId);
