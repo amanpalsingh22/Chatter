@@ -290,12 +290,22 @@
   }
 
   .message-bubble-has-reactions {
-    margin-bottom: 0.68rem;
+    min-width: 7.25rem;
+    margin-bottom: 0.9rem;
+    padding-bottom: 0.48rem;
+  }
+
+  .message-bubble-has-reactions .message-meta {
+    min-width: 5.85rem;
+    margin-left: 0;
+  }
+
+  .chat-start .message-bubble-has-reactions .message-meta {
+    padding-left: 2.55rem;
   }
 
   .chat-end .message-bubble-has-reactions .message-meta {
-    min-width: 4.5rem;
-    padding-right: 2rem;
+    padding-right: 2.55rem;
   }
 
   .message-bubble-outgoing {
@@ -392,6 +402,8 @@
   .message-unread-divider {
     gap: 0.6rem;
     color: oklch(var(--p));
+    font-size: 0.78rem;
+    font-weight: 800;
   }
 
   .message-unread-divider::before,
@@ -560,42 +572,50 @@
 
   .message-reaction-counts {
     position: absolute;
-    left: 0.45rem;
-    bottom: -0.62rem;
+    bottom: -0.8rem;
     z-index: 8;
     display: flex;
     flex-wrap: wrap;
-    justify-content: flex-start;
     gap: 0.18rem;
   }
 
+  .chat-start .message-reaction-counts {
+    right: auto;
+    left: 0.48rem;
+    justify-content: flex-start;
+  }
+
   .chat-end .message-reaction-counts {
-    right: 0.45rem;
+    right: 0.48rem;
     left: auto;
     justify-content: flex-end;
   }
 
   .message-reaction-counts button {
     display: inline-flex;
-    min-width: 1.9rem;
-    min-height: 1.9rem;
+    min-width: 2rem;
+    min-height: 2rem;
     align-items: center;
     justify-content: center;
     gap: 0.22rem;
-    border: 1px solid oklch(var(--bc) / 0.12);
+    border: 1px solid rgb(255 255 255 / 0.1);
     border-radius: 999px;
-    background: oklch(var(--b1) / 0.82);
+    background: rgb(38 25 35 / 0.94);
     padding: 0.18rem 0.38rem;
-    color: oklch(var(--bc));
-    font-size: 0.9rem;
+    color: white;
+    font-size: 0.95rem;
     font-weight: 700;
     line-height: 1;
-    box-shadow: 0 2px 7px oklch(var(--bc) / 0.16);
+    box-shadow: 0 3px 9px rgb(0 0 0 / 0.24);
+    backdrop-filter: blur(8px);
   }
 
   .message-reaction-counts .message-reaction-mine {
     border-color: oklch(var(--p) / 0.55);
-    background: oklch(var(--p) / 0.15);
+    background: rgb(38 25 35 / 0.94);
+    box-shadow:
+      0 0 0 2px oklch(var(--p) / 0.14),
+      0 3px 9px rgb(0 0 0 / 0.24);
   }
 
   .message-media-thumb {

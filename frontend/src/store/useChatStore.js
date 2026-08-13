@@ -853,7 +853,16 @@ export const useChatStore = create((set, get) => ({
     set({ typingUsers: {} });
   },
 
-  setSelectedChat: (selectedChat) =>
+  setSelectedChat: (selectedChat) => {
+    const currentChat = get().selectedChat;
+    const isSameChat =
+      currentChat &&
+      selectedChat &&
+      currentChat._id === selectedChat._id &&
+      Boolean(currentChat.isGroup) === Boolean(selectedChat.isGroup);
+
+    if (isSameChat) return;
+
     set({
       selectedChat,
       messages: [],
@@ -863,7 +872,8 @@ export const useChatStore = create((set, get) => ({
       messagePagination: { hasMore: false, nextCursor: null },
       shouldScrollToBottom: true,
       typingUsers: {},
-    }),
+    });
+  },
   addUnreadForMessage: (message) => {
     const { selectedChat } = get();
     const authUser = useAuthStore.getState().authUser;
